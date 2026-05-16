@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgriBuddy AI Smart Farming AR</title>
+
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  background: black;
+}
+
+#dashboard {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 360px;
+  z-index: 999;
+}
+
+.panel {
+  background: rgba(5,15,5,0.94);
+  border: 2px solid #39FF14;
+  border-radius: 12px;
+  padding: 15px;
+  color: #39FF14;
+  box-shadow: 0 0 20px #39FF14;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.metrics {
+  margin-top: 15px;
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+button {
+  padding: 10px;
+  background: transparent;
+  color: #39FF14;
+  border: 1px solid #39FF14;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.3s;
+  font-size: 12px;
+}
+
+button:hover {
+  background: #39FF14;
+  color: black;
+}
+
+#aiBox {
+  margin-top: 12px;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid #39FF14;
+  padding: 10px;
+  border-radius: 8px;
+  color: #b8ffb0;
+  font-size: 12px;
+}
+
+.section {
+  margin-top: 15px;
+  border-top: 1px dashed #39FF14;
+  padding-top: 10px;
+  font-size: 12px;
+}
+</style>
+
+<script>
+
+let rows = 0;
+let spacing = 0.5;
+let weather = "SUMMER";
+let waterUsage = 0;
+let cropHealth = 95;
+let pestRisk = "LOW";
+let revenue = 0;
+
+function speak(text){
+  const speech = new SpeechSynthesisUtterance(text);
+  speech.volume = 1;
+  speech.rate = 1;
+  speech.pitch = 1;
+  speechSynthesis.speak(speech);
+}
+
+AFRAME.registerComponent('spawn-crops', {
+
+  init: function () {
+
+    this.el.addEventListener('click', (e) => {
+
+      const point = e.detail.intersection.point;
+      rows++;
+      waterUsage += 25;
+      revenue = rows * 4500;
+
+      // ROW LABEL
+
+      const label = document.createElement('a-text');
+      label.setAttribute('value', `ROW ${rows}`);
+      label.setAttribute('position', `${point.x} 0.5 ${point.z}`);
+      label.setAttribute('scale', '0.5 0.5 0.5');
+      label.setAttribute('color', '#FFFFFF');
+      document.querySelector('a-marker').appendChild(label);
+
+      // CROP ROW LINE
+
+      const rowLine = document.createElement('a-entity');
+
+      rowLine.setAttribute('line', {
+        start: `${point.x} 0.02 ${point.z}`,
+        end: `${point.x} 0.02 ${point.z - (11 * spacing)}`,
+        color: '#39FF14'
+      });
+
+      document.querySelector('a-marker').appendChild(rowLine);
+
+      // IRRIGATION PIPE
+
+      const waterLine = document.createElement('a-entity');
+
+      waterLine.setAttribute('line', {
+        start: `${point.x + 0.15} 0.03 ${point.z}`,
+        end: `${point.x + 0.15} 0.03 ${point.z - (11 * spacing)}`,
+        color: '#00D9FF'
+      });
+
+      document.querySelector('a-marker').appendChild(waterLine);
+
+      // WATER FLOW PARTICLES
+
+      for(let w=0; w<12; w++){
+
+        const droplet = document.createElement('a-sphere');
+
+        droplet.setAttribute('radius',0.02);
+        droplet.setAttribute('color','#00D9FF');
+
+        droplet.setAttribute('animation',{
+          property:'position',
+          from:`${point.x + 0.15} 0.03 ${point.z}`,
+          to:`${point.x + 0.15} 0.03 ${point.z - (11 * spacing)}`,
+          dur:2500,
+          loop:true
+        });
+
+        document.querySelector('a-marker').appendChild(droplet);
+      }
+
+      // CROPS
+
+      for(let i = 0; i < 12; i++){
+
+        const crop = document.createElement('a-cone');
+
+        const randomScale = 0.8 + Math.random() * 0.4;
+        const randomRotation = Math.random() * 360;
+
+        crop.setAttribute('position', {
+          x: point.x + ((Math.random() - 0.5) * 0.08),
+          y: 0.18,
+          z: point.z - (i * spacing)
+        });
+
+        crop.setAttribute('radius-bottom', 0.05);
+        crop.setAttribute('radius-top', 0);
+        crop.setAttribute('height', 0.35);
+        crop.setAttribute('color', '#D9B44A');
+
+        crop.setAttribute('rotation', `0 ${randomRotation} 0`);
+
+        crop.setAttribute('scale','0 0 0');
+
+        crop.setAttribute('animation', {
+          property: 'scale',
+          to: `${randomScale} ${randomScale} ${randomScale}`,
+          dur: 700,
+          easing: 'easeOutElastic'
+        });
+
+        crop.setAttribute('animation__sway', {
+          property: 'rotation',
+          dir: 'alternate',
+          dur: 2000,
+          loop: true,
+          to: `0 ${randomRotation} 5`
+        });
+
+        document.querySelector('a-marker').appendChild(crop);
+      }
+
+      // HEATMAP ZONE
+
+      const heatZone = document.createElement('a-circle');
+
+      heatZone.setAttribute('position', `${point.x} 0.01 ${point.z - 2}`);
+      heatZone.setAttribute('rotation', '-90 0 0');
+      heatZone.setAttribute('radius', '0.8');
+      heatZone.setAttribute('color', '#FF0000');
+      heatZone.setAttribute('opacity', '0.25');
+
+      document.querySelector('a-marker').appendChild(heatZone);
+
+      // PEST ZONE
+
+      if(Math.random() > 0.5){
+
+        pestRisk = "MEDIUM";
+
+        const pest = document.createElement('a-sphere');
+
+        pest.setAttribute('position', {
+          x: point.x + 1,
+          y: 0.3,
+          z: point.z - 2
+        });
+
+        pest.setAttribute('radius', 0.4);
+        pest.setAttribute('color', 'red');
+        pest.setAttribute('opacity', 0.45);
+
+        pest.setAttribute('animation',{
+          property:'scale',
+          dir:'alternate',
+          dur:1000,
+          loop:true,
+          to:'1.3 1.3 1.3'
+        });
+
+        document.querySelector('a-marker').appendChild(pest);
+      }
+
+      updateMetrics();
+    });
+  }
+});
+
+function updateMetrics(){
+
+  document.getElementById("metrics").innerHTML = `
+
+  Rows Placed: ${rows}<br>
+  Total Plants: ${rows * 12}<br>
+  Weather Mode: ${weather}<br>
+  Crop Spacing: ${spacing}m<br>
+  Estimated Yield: ${rows * 85}kg<br>
+  Water Usage: ${waterUsage}L<br>
+  Crop Health: ${cropHealth}%<br>
+  Pest Risk: ${pestRisk}<br>
+  Revenue Prediction: ₹${revenue}
+
+  `;
+}
+
+function setWeather(mode){
+
+  weather = mode.toUpperCase();
+
+  const sky = document.querySelector('a-sky');
+  const field = document.querySelector('#field');
+  const scene = document.querySelector('a-scene');
+
+  if(mode === "summer"){
+
+    spacing = 0.6;
+
+    sky.setAttribute('color','#87CEEB');
+    field.setAttribute('color','#4E7D32');
+
+    scene.setAttribute('fog','type: linear; color: #dce8a7; near: 20; far: 70');
+
+    document.getElementById("aiBox").innerHTML =
+    "AI Recommendation:<br>Increase crop spacing during high temperature.";
+
+    speak("Summer conditions activated");
+  }
+
+  if(mode === "rain"){
+
+    spacing = 0.45;
+
+    sky.setAttribute('color','#5C6D7C');
+    field.setAttribute('color','#355D2D');
+
+    scene.setAttribute('fog','type: linear; color: #72808c; near: 10; far: 40');
+
+    document.getElementById("aiBox").innerHTML =
+    "AI Recommendation:<br>Moderate spacing recommended for water drainage.";
+
+    createRain();
+    speak("Rain conditions detected");
+  }
+
+  if(mode === "winter"){
+
+    spacing = 0.35;
+
+    sky.setAttribute('color','#D9E1E8');
+    field.setAttribute('color','#687D60');
+
+    scene.setAttribute('fog','type: linear; color: #dfe7ec; near: 15; far: 50');
+
+    document.getElementById("aiBox").innerHTML =
+    "AI Recommendation:<br>Dense plantation increases winter efficiency.";
+
+    speak("Winter mode activated");
+  }
+
+  updateMetrics();
+}
+
+function createRain(){
+
+  for(let i = 0; i < 120; i++){
+
+    const rain = document.createElement('a-cylinder');
+
+    rain.setAttribute('radius',0.005);
+    rain.setAttribute('height',0.25);
+    rain.setAttribute('color','#8fd3ff');
+
+    rain.setAttribute('position',{
+      x:(Math.random()*6)-3,
+      y:4 + Math.random()*5,
+      z:(Math.random()*6)-3
+    });
+
+    rain.setAttribute('animation',{
+      property:'position',
+      to:`${(Math.random()*6)-3} -2 ${(Math.random()*6)-3}`,
+      dur:1000,
+      loop:true
+    });
+
+    document.querySelector('a-marker').appendChild(rain);
+  }
+}
+
+function scanField(){
+
+  cropHealth = 82;
+  pestRisk = "HIGH";
+
+  document.getElementById("aiBox").innerHTML = `
+  AI ALERT:<br>
+  Disease detected in crop zone.<br>
+  Immediate pesticide spray recommended.
+  `;
+
+  speak("Warning. Crop disease detected.");
+
+  const scan = document.createElement('a-ring');
+
+  scan.setAttribute('position','0 0.05 -2');
+  scan.setAttribute('rotation','-90 0 0');
+  scan.setAttribute('radius-inner','0.5');
+  scan.setAttribute('radius-outer','0.7');
+  scan.setAttribute('color','#FF0000');
+
+  scan.setAttribute('animation',{
+    property:'scale',
+    dir:'alternate',
+    dur:800,
+    loop:true,
+    to:'1.5 1.5 1.5'
+  });
+
+  document.querySelector('a-marker').appendChild(scan);
+
+  updateMetrics();
+}
+
+function fertilizerSpray(){
+
+  speak("Fertilizer spray activated");
+
+  for(let i=0;i<80;i++){
+
+    const spray = document.createElement('a-sphere');
+
+    spray.setAttribute('radius',0.015);
+    spray.setAttribute('color','#FFFF00');
+
+    spray.setAttribute('position',{
+      x:(Math.random()*6)-3,
+      y:1 + Math.random()*2,
+      z:(Math.random()*6)-3
+    });
+
+    spray.setAttribute('animation',{
+      property:'position',
+      to:`${(Math.random()*6)-3} 0 ${(Math.random()*6)-3}`,
+      dur:1500
+    });
+
+    document.querySelector('a-marker').appendChild(spray);
+  }
+}
+
+function createDrone(){
+
+  const drone = document.createElement('a-box');
+
+  drone.setAttribute('id','drone');
+  drone.setAttribute('position','-2 1.5 0');
+  drone.setAttribute('depth','0.2');
+  drone.setAttribute('height','0.08');
+  drone.setAttribute('width','0.35');
+  drone.setAttribute('color','#222');
+
+  drone.setAttribute('animation',{
+    property:'position',
+    dir:'alternate',
+    loop:true,
+    dur:5000,
+    to:'2 1.5 -3'
+  });
+
+  document.querySelector('a-marker').appendChild(drone);
+}
+
+function clearField(){
+  location.reload();
+}
+
+function autoDayNight(){
+
+  const sky = document.querySelector('a-sky');
+
+  setInterval(()=>{
+
+    if(sky.getAttribute('color') === '#87CEEB'){
+      sky.setAttribute('color','#050816');
+    }
+    else{
+      sky.setAttribute('color','#87CEEB');
+    }
+
+  },8000);
+}
+
+window.onload = ()=>{
+  createDrone();
+  autoDayNight();
+  updateMetrics();
+};
+
+</script>
+</head>
+
+<body>
+
+<div id="dashboard">
+<div class="panel">
+
+<div class="title">
+AGRIBUDDY AI SYSTEM
+</div>
+
+<div class="metrics" id="metrics"></div>
+
+<div class="buttons">
+
+<button onclick="setWeather('summer')">SUMMER</button>
+<button onclick="setWeather('rain')">RAIN</button>
+<button onclick="setWeather('winter')">WINTER</button>
+<button onclick="scanField()">SCAN FIELD</button>
+<button onclick="fertilizerSpray()">SPRAY</button>
+<button onclick="clearField()">CLEAR</button>
+
+</div>
+
+<div id="aiBox">
+AI Recommendation:<br>
+System Initialized.
+</div>
+
+<div class="section">
+FEATURES:<br><br>
+
+• AR Smart Farming<br>
+• AI Recommendations<br>
+• Pest Detection<br>
+• Heatmap Visualization<br>
+• Water Flow Animation<br>
+• Weather Simulation<br>
+• Drone Surveillance<br>
+• Voice Assistant<br>
+• Disease Detection<br>
+• Fertilizer Spray<br>
+• Dynamic Analytics<br>
+• Yield Estimation
+
+</div>
+
+</div>
+</div>
+
+<a-scene
+embedded
+arjs="sourceType: webcam; debugUIEnabled: false;"
+cursor="rayOrigin: mouse"
+raycaster="objects: .clickable"
+renderer="antialias: true; logarithmicDepthBuffer: true;"
+fog="type: linear; color: #dce8a7; near: 20; far: 70"
+vr-mode-ui="enabled: false"
+renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true;"
+style="background: transparent;">
+
+<a-marker preset="hiro">
+
+<a-plane
+id="field"
+class="clickable"
+spawn-crops
+position="0 0 0"
+rotation="-90 0 0"
+width="6"
+height="6"
+color="#4E7D32">
+</a-plane>
+
+<a-cylinder
+position="0 0.12 0"
+radius="0.08"
+height="0.12"
+color="#39FF14">
+</a-cylinder>
+
+<a-light type="ambient" intensity="0.55"></a-light>
+
+<a-light
+type="directional"
+intensity="1.3"
+position="2 4 2">
+</a-light>
+
+</a-marker>
+
+<a-entity camera></a-entity>
+
+<!-- Removed a-sky because it blocks webcam background in AR mode -->
+
+</a-scene>
+
+</body>
+</html>
